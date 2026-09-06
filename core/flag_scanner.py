@@ -58,19 +58,22 @@ class FlagScanner:
                 try:
                     pat_str = p["pattern"]
                     # Compile byte-level regex
-                    compiled = re.compile(pat_str.encode("utf-8"), re.IGNORECASE)
+                    flags = re.IGNORECASE if p.get("ignore_case", False) else 0
+                    compiled = re.compile(pat_str.encode("utf-8"), flags)
                     self.compiled_patterns.append((p.get("name", "Custom"), compiled, p.get("description", "")))
                 except re.error:
                     pass
 
-    def add_custom_pattern(self, name: str, pattern_str: str, description: str = "") -> bool:
+    def add_custom_pattern(self, name: str, pattern_str: str, description: str = "", ignore_case: bool = False) -> bool:
         try:
-            compiled = re.compile(pattern_str.encode("utf-8"), re.IGNORECASE)
+            flags = re.IGNORECASE if ignore_case else 0
+            compiled = re.compile(pattern_str.encode("utf-8"), flags)
             self.patterns.append({
                 "name": name,
                 "pattern": pattern_str,
                 "enabled": True,
-                "description": description
+                "description": description,
+                "ignore_case": ignore_case
             })
             self.compiled_patterns.append((name, compiled, description))
             return True
@@ -108,8 +111,8 @@ class FlagScanner:
                     except Exception:
                         flag_str = str(matched_bytes)
 
-                    # Deduplication check
-                    dedup_key = f"{flag_str}:{name}"
+                    # Deduplication check: prioritize more specific patterns over generic
+                    dedup_key = f"{flag_str}:{encoding_path}"
                     if not allow_duplicates and dedup_key in self.seen_flags:
                         continue
                     self.seen_flags.add(dedup_key)
