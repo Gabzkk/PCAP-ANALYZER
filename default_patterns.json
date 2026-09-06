@@ -1,0 +1,51 @@
+[
+  {
+    "name": "Hack The Box",
+    "pattern": "HTB\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "Standard Hack The Box flag format HTB{...}"
+  },
+  {
+    "name": "TryHackMe",
+    "pattern": "THM\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "TryHackMe flag format THM{...}"
+  },
+  {
+    "name": "Hackers For Good / H4G",
+    "pattern": "H4G\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "H4G{...} flag format"
+  },
+  {
+    "name": "picoCTF",
+    "pattern": "[Pp]ico[Cc][Tt][Ff]\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "picoCTF flag format (case variations)"
+  },
+  {
+    "name": "Standard Flag",
+    "pattern": "(?:flag|FLAG)\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "Standard flag{...} or FLAG{...} format"
+  },
+  {
+    "name": "CTF generic",
+    "pattern": "CTF\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "Generic CTF{...} format"
+  },
+  {
+    "name": "canyouhackit",
+    "pattern": "canyouhackit\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "canyouhackit{...} challenges"
+  },
+  {
+    "name": "Generic Flag Pattern",
+    "pattern": "[a-zA-Z0-9_\\-\\.\\$]{2,25}\\{[a-zA-Z0-9_\\-\\.\\+\\=/!@#\\$%\\^&\\*\\?~ ]{4,120}\\}",
+    "enabled": true,
+    "description": "General format for custom or unusual CTF flags word{...}"
+  }
+]
+
