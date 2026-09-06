@@ -36,6 +36,7 @@
 ## Key Capabilities
 
 - **Streaming Packet Ingestion:** Utilizes Scapy's streaming `PcapReader` to process large captures packet-by-packet without exhausting system memory.
+- **Broad Protocol Reading:** Automatically uses installed TShark/Wireshark dissectors for application identification and readable packet details. Scapy remains the fallback when TShark is unavailable. See [protocol support](docs/PROTOCOL_SUPPORT.md) for coverage and encryption limits.
 - **Bi-Directional Stream Reassembly:** Tracks TCP/UDP sessions by canonical flow 4-tuple `(src_ip, src_port, dst_ip, dst_port)` and separates client-to-server and server-to-client directions.
 - **Protocol Reassembly:**
   - **HTTP:** De-chunks HTTP/1.1 chunked transfer encodings, unzips Gzip/Deflate compressed responses, and parses `Content-Disposition` filenames.
@@ -165,7 +166,7 @@ The native desktop workspace uses bundled line icons, consistent dark/light them
 ### 3. Inspecting results
 - **Flags:** Read-only evidence table with live filtering, selection-based copying, and **Copy all**. Double-click a row for payload context.
 - **Files:** Read-only recovered files table. Filter by name, type, or the full SHA256 hash. Select a row and click **Preview** for image, text, and hex views. Anomaly indicators use an icon and text; hover for details.
-- **Overview:** Six capture metrics, metadata, and protocol distribution. This is the initial screen.
+- **Overview:** Six capture metrics, metadata, application protocol distribution, and a read-only **Protocol details** table. Evidence distinguishes decoded protocols, payload signatures, and port hints. Hover over a detail for endpoints and its full text. This is the initial screen.
 - **Console:** Searchable activity log with optional auto-scroll and **Save log**. Colors adapt to the selected theme.
 - Tables show guidance when empty or when no results match a filter.
 
@@ -314,4 +315,3 @@ Pcap-ANALYZER/
 +**Copyright © 2026 [Gabzkk](https://github.com/Gabzkk) &lt;velascogab9@gmail.com&gt;. All rights reserved.**
 +
 +*Disclaimer: This software is designed for educational, CTF competitions, security audit, and authorized digital forensics research purposes only.*
-

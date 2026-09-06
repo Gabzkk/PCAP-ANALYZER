@@ -1,7 +1,7 @@
 import time
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QFrame,
-    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox
+    QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox, QScrollArea
 )
 from PyQt6.QtCore import Qt
 from core.models import AnalysisSummary
@@ -38,7 +38,15 @@ class SummaryTab(QWidget):
     """Capture overview and protocol distribution backed by engine results."""
     def __init__(self, parent=None):
         super().__init__(parent)
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        content = QWidget()
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(14)
         heading = QLabel("Investigation overview")
@@ -75,6 +83,7 @@ class SummaryTab(QWidget):
         grp_proto = QGroupBox("Protocol distribution")
         proto_layout = QVBoxLayout(grp_proto)
         self.proto_table = QTableWidget(0, 3)
+        self.proto_table.setMinimumHeight(180)
         self.proto_table.setHorizontalHeaderLabels(["Protocol", "Packets", "Traffic share"])
         self.proto_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.proto_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
@@ -87,6 +96,21 @@ class SummaryTab(QWidget):
         proto_layout.addWidget(self.empty_state)
         self.proto_table.hide()
         layout.addWidget(grp_proto, 1)
+
+        grp_readings = QGroupBox("Protocol details")
+        readings_layout = QVBoxLayout(grp_readings)
+        self.readings_note = QLabel("Decoded fields appear here after analysis. Port labels are service hints.")
+        self.readings_note.setWordWrap(True)
+        readings_layout.addWidget(self.readings_note)
+        self.details_table = QTableWidget(0, 5)
+        self.details_table.setMinimumHeight(200)
+        self.details_table.setHorizontalHeaderLabels(["Capture", "Packet", "Protocol", "Evidence", "Details"])
+        configure_evidence_table(self.details_table)
+        self.details_table.setAlternatingRowColors(True)
+        self.details_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.details_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        readings_layout.addWidget(self.details_table)
+        layout.addWidget(grp_readings, 1)
 
     def update_summary(self, summary: AnalysisSummary):
         self.card_flags.set_value(str(summary.flags_count))
@@ -112,6 +136,17 @@ class SummaryTab(QWidget):
         self.empty_state.setVisible(not sorted_protos)
         self.empty_state.title.setText("No protocol traffic found")
         self.empty_state.description.setText("This capture produced no protocol counts. Check the console for details.")
+        self.details_table.setRowCount(0)
+        for row, detail in enumerate(summary.protocol_details):
+            self.details_table.insertRow(row)
+            for col, key in enumerate(("capture", "packet_id", "protocol", "detection", "details")):
+                item = QTableWidgetItem(str(detail[key]))
+                item.setToolTip(f"{detail['source']} → {detail['destination']}\n{detail['details']}")
+                self.details_table.setItem(row, col, item)
+        self.readings_note.setText(
+            f"Showing {len(summary.protocol_details):,} packet details; {summary.protocol_details_omitted:,} omitted. "
+            "Port = service hint. Encrypted payloads require session keys; visible handshake fields may be shown."
+        )
 
     def clear(self):
         for card in (self.card_flags, self.card_files, self.card_packets, self.card_streams, self.card_stego):
@@ -119,6 +154,8 @@ class SummaryTab(QWidget):
         self.card_duration.set_value("0.0s")
         self.lbl_meta.setText("Analysis in progress. Capture details will appear when it finishes.")
         self.proto_table.setRowCount(0)
+        self.details_table.setRowCount(0)
+        self.readings_note.setText("Reading protocol details…")
         self.proto_table.hide()
         self.empty_state.show()
         self.empty_state.title.setText("Analyzing traffic")

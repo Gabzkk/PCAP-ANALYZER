@@ -81,6 +81,7 @@ class StreamInfo:
     server_payload: bytearray = field(default_factory=bytearray)
     start_time: float = 0.0
     end_time: float = 0.0
+    app_detection: str = "transport"
 
     @property
     def flow_key(self) -> tuple:
@@ -106,6 +107,9 @@ class AnalysisSummary:
     end_time: float = 0.0
     duration_seconds: float = 0.0
     error_count: int = 0
+    transport_counts: Dict[str, int] = field(default_factory=dict)
+    protocol_details: List[Dict[str, Any]] = field(default_factory=list)
+    protocol_details_omitted: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -115,6 +119,9 @@ class AnalysisSummary:
             "processed_packets": self.processed_packets,
             "total_streams": self.total_streams,
             "protocol_counts": self.protocol_counts,
+            "transport_counts": self.transport_counts,
+            "protocol_details": self.protocol_details,
+            "protocol_details_omitted": self.protocol_details_omitted,
             "flags_count": self.flags_count,
             "files_count": self.files_count,
             "stego_alerts_count": self.stego_alerts_count,
@@ -123,4 +130,3 @@ class AnalysisSummary:
             "duration_seconds": round(self.duration_seconds, 2),
             "error_count": self.error_count
         }
-

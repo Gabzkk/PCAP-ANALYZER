@@ -73,6 +73,11 @@ class TestHeadlessGUI(unittest.TestCase):
         self.assertGreaterEqual(len(win.tab_flags.flags), 5)
         self.assertGreaterEqual(len(win.tab_files.files), 1)
         self.assertIsNotNone(win.latest_summary)
+        self.assertIn("HTTP", win.latest_summary.protocol_counts)
+        self.assertIn("DNS", win.latest_summary.protocol_counts)
+        self.assertEqual(sum(win.latest_summary.protocol_counts.values()), win.latest_summary.processed_packets)
+        self.assertGreater(win.tab_summary.details_table.rowCount(), 0)
+        self.assertEqual(win.tab_summary.details_table.editTriggers(), win.tab_summary.details_table.EditTrigger.NoEditTriggers)
 
         # Test Report Export (JSON, HTML, PDF)
         json_rep = os.path.join(self.temp_dir, "test_report.json")
@@ -88,6 +93,20 @@ class TestHeadlessGUI(unittest.TestCase):
         pdf_ok = ForensicReporter.export_pdf(win.latest_summary, win.tab_flags.flags, win.tab_files.files, pdf_rep)
         self.assertTrue(pdf_ok)
         self.assertTrue(os.path.exists(pdf_rep))
+
+    def test_protocol_report_escapes_capture_content_and_overview_clears(self):
+        win = MainWindow(output_dir=os.path.join(self.temp_dir, "protocol_details"))
+        summary = AnalysisSummary(capture_file="test.pcap", protocol_details=[{
+            "capture": "test.pcap", "packet_id": 1, "protocol": "HTTP", "detection": "dissector",
+            "source": "1.1.1.1:1234", "destination": "2.2.2.2:80", "details": "GET /<script>alert(1)</script>",
+        }])
+        win.tab_summary.update_summary(summary)
+        self.assertIn("<script>", win.tab_summary.details_table.item(0, 4).text())
+        html = ForensicReporter.generate_html(summary, [], [])
+        self.assertNotIn("<script>", html)
+        self.assertIn("&lt;script&gt;", html)
+        win.tab_summary.clear()
+        self.assertEqual(win.tab_summary.details_table.rowCount(), 0)
 
     def test_live_results_respect_filter_and_cannot_be_edited(self):
         win = MainWindow(output_dir=os.path.join(self.temp_dir, "filter_out"))

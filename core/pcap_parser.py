@@ -1,8 +1,13 @@
 import os
 import re
+import shutil
 from typing import Generator, Tuple, Optional, Dict, Any
 
 from scapy.all import PcapReader, IP, IPv6, TCP, UDP, ICMP, DNS, Raw
+from scapy.layers.inet6 import _ICMPv6
+
+from .protocols import detect_protocol
+from .tshark_parser import parse_tshark
 
 
 PCAP_MAGIC_BYTES = [
@@ -52,11 +57,14 @@ def validate_capture_file(filepath: str) -> Tuple[bool, str, str]:
 
 class StreamingCaptureParser:
     """
-    Memory-efficient streaming parser for PCAP, PCAPNG, and text network dumps.
+    Streaming parser for PCAP, PCAPNG, and text network dumps.
+    TShark supplies full dissection when available; Scapy preserves payloads otherwise.
     """
 
     def __init__(self, filepath: str):
         self.filepath = filepath
+        self.tshark_path = shutil.which("tshark")
+        self.backend = "TShark" if self.tshark_path else "Scapy"
         self.file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
 
     def parse_packets(self) -> Generator[Dict[str, Any], None, None]:
@@ -66,6 +74,10 @@ class StreamingCaptureParser:
             'packet_id': int,
             'timestamp': float,
             'proto': str,
+            'transport': str,
+            'app_protocol': str,
+            'detection': str,
+            'details': str,
             'src_ip': str,
             'src_port': int,
             'dst_ip': str,
@@ -80,7 +92,12 @@ class StreamingCaptureParser:
             raise ValueError(err)
 
         if fmt == "Text Dump":
+            self.backend = "Text"
             yield from self._parse_text_dump()
+            return
+
+        if self.tshark_path:
+            yield from parse_tshark(self.filepath, self.tshark_path)
             return
 
         # Scapy PcapReader for streaming
@@ -116,28 +133,26 @@ class StreamingCaptureParser:
             dst_port = pkt[TCP].dport
             flags = pkt[TCP].flags
             is_syn = bool(flags & 0x02)
-            if Raw in pkt:
-                payload = bytes(pkt[Raw].load)
+            payload = bytes(pkt[TCP].payload)
         elif UDP in pkt:
             proto = "UDP"
             src_port = pkt[UDP].sport
             dst_port = pkt[UDP].dport
-            if DNS in pkt:
-                proto = "DNS"
-                # If DNS layer present, capture raw payload or serialized DNS
-                try:
-                    payload = bytes(pkt[DNS])
-                except Exception:
-                    pass
-            elif Raw in pkt:
-                payload = bytes(pkt[Raw].load)
+            payload = bytes(pkt[UDP].payload)
         elif ICMP in pkt:
             proto = "ICMP"
-            if Raw in pkt:
-                payload = bytes(pkt[Raw].load)
-        else:
-            if Raw in pkt:
-                payload = bytes(pkt[Raw].load)
+            payload = bytes(pkt[ICMP].payload)
+        elif pkt.haslayer(_ICMPv6, _subclass=True):
+            proto = "ICMPv6"
+            icmp = pkt.getlayer(_ICMPv6, _subclass=True)
+            payload = bytes(getattr(icmp, "data", b"")) + bytes(icmp.payload)
+        elif Raw in pkt:
+            payload = bytes(pkt[Raw].load)
+
+        app_protocol, detection = detect_protocol(proto, src_port, dst_port, payload)
+        if DNS in pkt:
+            app_protocol, detection = "DNS", "dissector"
+        details = pkt.summary()
 
         summary_str = f"#{packet_id} {proto} {src_ip}:{src_port} -> {dst_ip}:{dst_port} len={len(payload)}"
 
@@ -145,6 +160,10 @@ class StreamingCaptureParser:
             "packet_id": packet_id,
             "timestamp": timestamp,
             "proto": proto,
+            "transport": proto,
+            "app_protocol": app_protocol,
+            "detection": detection,
+            "details": details,
             "src_ip": src_ip,
             "src_port": src_port,
             "dst_ip": dst_ip,
@@ -164,6 +183,10 @@ class StreamingCaptureParser:
                     "packet_id": packet_id,
                     "timestamp": 0.0,
                     "proto": "TEXT",
+                    "transport": "TEXT",
+                    "app_protocol": "TEXT",
+                    "detection": "transport",
+                    "details": "Text dump line",
                     "src_ip": "127.0.0.1",
                     "src_port": 0,
                     "dst_ip": "127.0.0.1",
@@ -172,4 +195,3 @@ class StreamingCaptureParser:
                     "summary": f"Line #{packet_id} (Text Dump)",
                     "is_syn": False
                 }
-

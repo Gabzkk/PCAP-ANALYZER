@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from html import escape
 from typing import List, Optional
 from .models import FlagMatch, ExtractedFile, AnalysisSummary
 
@@ -74,7 +75,7 @@ class ForensicReporter:
             pct = (count / max(1, summary.processed_packets)) * 100
             proto_rows += f"""
             <tr>
-                <td><strong>{proto}</strong></td>
+                <td><strong>{escape(proto)}</strong></td>
                 <td>{count:,}</td>
                 <td>
                     <div class="progress-bar-bg">
@@ -84,6 +85,12 @@ class ForensicReporter:
                 <td>{pct:.1f}%</td>
             </tr>
             """
+
+        detail_rows = "".join(
+            "<tr>" + "".join(f"<td>{escape(str(detail[key]))}</td>" for key in
+                            ("capture", "packet_id", "protocol", "detection", "source", "destination", "details")) + "</tr>"
+            for detail in summary.protocol_details
+        )
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -284,6 +291,13 @@ class ForensicReporter:
             </tbody>
         </table>
     </div>
+    <div class="section-card">
+        <h2 class="section-title">Protocol Details</h2>
+        <p>Showing {len(summary.protocol_details):,} packet details; {summary.protocol_details_omitted:,} omitted.
+        Port labels are service hints. Encrypted payloads require session keys; only visible fields are decoded.</p>
+        <table><thead><tr><th>Capture</th><th>Packet</th><th>Protocol</th><th>Evidence</th>
+        <th>Source</th><th>Destination</th><th>Details</th></tr></thead><tbody>{detail_rows}</tbody></table>
+    </div>
 </body>
 </html>"""
         return html
@@ -311,4 +325,3 @@ class ForensicReporter:
 
         doc.print(writer)
         return True
-

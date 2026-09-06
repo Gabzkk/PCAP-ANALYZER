@@ -9,6 +9,8 @@ from .pcap_parser import StreamingCaptureParser, validate_capture_file
 from .stream_reassembler import StreamReassembler
 from .flag_scanner import FlagScanner
 from .file_extractor import FileExtractor
+from .protocols import ProtocolSummary
+from contextlib import closing
 
 
 class AnalysisEngine(QThread):
@@ -63,7 +65,7 @@ class AnalysisEngine(QThread):
             self.error_occurred.emit("No capture files specified for analysis.")
             return
 
-        combined_protocol_counts: Dict[str, int] = {}
+        protocols = ProtocolSummary()
         total_streams_count = 0
         total_stego_count = 0
         total_size_bytes = 0
@@ -89,6 +91,7 @@ class AnalysisEngine(QThread):
                 file_extractor = FileExtractor(file_output_dir)
                 stream_reassembler = StreamReassembler()
                 parser = StreamingCaptureParser(filepath)
+                self.log_message.emit("INFO", f"Protocol reader: {parser.backend}")
 
                 # Estimate packet count based on filesize (average 300 bytes per packet)
                 est_packets = max(100, fsize // 300)
@@ -96,64 +99,67 @@ class AnalysisEngine(QThread):
                 last_progress_emit = 0.0
 
                 # 1. Packet Streaming & Immediate Payload Inspection
-                for pkt_info in parser.parse_packets():
-                    if self._is_stopped:
-                        break
+                with closing(parser.parse_packets()) as packets:
+                    for pkt_info in packets:
+                        if self._is_stopped:
+                            break
 
-                    pkt_count += 1
-                    self.total_packets_processed += 1
-                    proto = pkt_info["proto"]
-                    combined_protocol_counts[proto] = combined_protocol_counts.get(proto, 0) + 1
+                        pkt_count += 1
+                        self.total_packets_processed += 1
+                        proto = pkt_info["proto"]
+                        protocols.add_packet(pkt_info, os.path.basename(filepath))
 
-                    payload = pkt_info["payload"]
-                    pkt_id = pkt_info["packet_id"]
+                        payload = pkt_info["payload"]
+                        pkt_id = pkt_info["packet_id"]
 
-                    # Update stream reassembler
-                    if proto in ("TCP", "UDP"):
-                        stream_reassembler.process_packet(
-                            proto=proto,
-                            src_ip=pkt_info["src_ip"],
-                            src_port=pkt_info["src_port"],
-                            dst_ip=pkt_info["dst_ip"],
-                            dst_port=pkt_info["dst_port"],
-                            payload=payload,
-                            timestamp=pkt_info["timestamp"],
-                            is_syn=pkt_info["is_syn"]
-                        )
+                        # Update stream reassembler
+                        if proto in ("TCP", "UDP"):
+                            stream_reassembler.process_packet(
+                                proto=proto,
+                                src_ip=pkt_info["src_ip"],
+                                src_port=pkt_info["src_port"],
+                                dst_ip=pkt_info["dst_ip"],
+                                dst_port=pkt_info["dst_port"],
+                                payload=payload,
+                                timestamp=pkt_info["timestamp"],
+                                is_syn=pkt_info["is_syn"],
+                                app_protocol=pkt_info.get("app_protocol"),
+                                detection=pkt_info.get("detection")
+                            )
 
-                    # Scan raw packet payload for flags
-                    if payload and len(payload) >= 4:
-                        flags_in_pkt = self.flag_scanner.scan_bytes(
-                            payload=payload,
-                            source=f"{os.path.basename(filepath)} - Packet #{pkt_id}",
-                            packet_id=pkt_id
-                        )
-                        for fl in flags_in_pkt:
-                            self.found_flags.append(fl)
-                            self.flag_found.emit(fl)
-                            self.log_message.emit("FOUND", f"Flag discovered in Packet #{pkt_id}: {fl.flag} ({fl.encoding})")
+                        # Scan raw packet payload for flags
+                        if payload and len(payload) >= 4:
+                            flags_in_pkt = self.flag_scanner.scan_bytes(
+                                payload=payload,
+                                source=f"{os.path.basename(filepath)} - Packet #{pkt_id}",
+                                packet_id=pkt_id
+                            )
+                            for fl in flags_in_pkt:
+                                self.found_flags.append(fl)
+                                self.flag_found.emit(fl)
+                                self.log_message.emit("FOUND", f"Flag discovered in Packet #{pkt_id}: {fl.flag} ({fl.encoding})")
 
-                    # ICMP payload carving
-                    if proto == "ICMP" and payload and len(payload) >= 16:
-                        carved = file_extractor.carve_all(
-                            data=payload,
-                            source_label=f"ICMP #{pkt_id}",
-                            packet_id=pkt_id
-                        )
-                        for cf in carved:
-                            self._handle_extracted_file(cf)
+                        # ICMP payload carving
+                        if proto in ("ICMP", "ICMPv6") and payload and len(payload) >= 16:
+                            carved = file_extractor.carve_all(
+                                data=payload,
+                                source_label=f"ICMP #{pkt_id}",
+                                packet_id=pkt_id
+                            )
+                            for cf in carved:
+                                self._handle_extracted_file(cf)
 
-                    # Emit progress throttled at 50ms intervals
-                    now = time.time()
-                    if now - last_progress_emit >= 0.05:
-                        last_progress_emit = now
-                        pct = min(90.0, (pkt_count / est_packets) * 90.0)
-                        self.progress_updated.emit(
-                            self.total_packets_processed,
-                            est_packets * total_files,
-                            pct,
-                            f"Analyzing {os.path.basename(filepath)}: {pkt_count:,} packets..."
-                        )
+                        # Emit progress throttled at 50ms intervals
+                        now = time.time()
+                        if now - last_progress_emit >= 0.05:
+                            last_progress_emit = now
+                            pct = min(90.0, (pkt_count / est_packets) * 90.0)
+                            self.progress_updated.emit(
+                                self.total_packets_processed,
+                                est_packets * total_files,
+                                pct,
+                                f"Analyzing {os.path.basename(filepath)}: {pkt_count:,} packets..."
+                            )
 
                 if self._is_stopped:
                     break
@@ -218,7 +224,10 @@ class AnalysisEngine(QThread):
                 total_packets=self.total_packets_processed,
                 processed_packets=self.total_packets_processed,
                 total_streams=total_streams_count,
-                protocol_counts=combined_protocol_counts,
+                protocol_counts=protocols.protocol_counts,
+                transport_counts=protocols.transport_counts,
+                protocol_details=protocols.details,
+                protocol_details_omitted=protocols.details_omitted,
                 flags_count=len(self.found_flags),
                 files_count=len(self.extracted_files),
                 stego_alerts_count=total_stego_count,

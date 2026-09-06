@@ -1,5 +1,6 @@
 from typing import Dict, Tuple, Optional
 from .models import StreamInfo
+from .protocols import detect_protocol
 
 
 class StreamReassembler:
@@ -20,39 +21,8 @@ class StreamReassembler:
         return (proto, min(ep1, ep2), max(ep1, ep2))
 
     def detect_app_protocol(self, proto: str, src_port: int, dst_port: int, payload: bytes) -> str:
-        """Heuristically identify the application protocol."""
-        ports = {src_port, dst_port}
-
-        # Check by ports first
-        if 80 in ports or 8080 in ports or 8000 in ports or 8888 in ports:
-            return "HTTP"
-        if 21 in ports:
-            return "FTP"
-        if 20 in ports:
-            return "FTP-DATA"
-        if 25 in ports or 587 in ports:
-            return "SMTP"
-        if 23 in ports:
-            return "Telnet"
-        if 53 in ports:
-            return "DNS"
-        if 22 in ports:
-            return "SSH"
-
-        # Check by payload signatures
-        if payload:
-            if payload.startswith((b"GET ", b"POST ", b"HEAD ", b"PUT ", b"DELETE ", b"HTTP/1.")):
-                return "HTTP"
-            if payload.startswith((b"USER ", b"PASS ", b"220 ", b"331 ")):
-                return "FTP"
-            if payload.startswith((b"EHLO ", b"HELO ", b"MAIL FROM:", b"RCPT TO:")):
-                return "SMTP"
-            if payload.startswith(b"SSH-"):
-                return "SSH"
-            if payload.startswith((b"\xff\xfd", b"\xff\xfb", b"\xff\xfa")):
-                return "Telnet"
-
-        return proto
+        """Identify signatures first, then transport-specific service hints."""
+        return detect_protocol(proto, src_port, dst_port, payload)[0]
 
     def process_packet(
         self,
@@ -63,22 +33,28 @@ class StreamReassembler:
         dst_port: int,
         payload: bytes,
         timestamp: float,
-        is_syn: bool = False
+        is_syn: bool = False,
+        app_protocol: Optional[str] = None,
+        detection: Optional[str] = None
     ) -> StreamInfo:
         """
         Updates stream tracking for an incoming packet.
         """
         flow_key = self._get_flow_key(proto, src_ip, src_port, dst_ip, dst_port)
+        candidate, evidence = detect_protocol(proto, src_port, dst_port, payload)
+        if app_protocol is not None:
+            candidate = app_protocol
+            evidence = detection or evidence
 
         if flow_key not in self.streams:
             stream_id = self.next_stream_id
             self.next_stream_id += 1
-            app_proto = self.detect_app_protocol(proto, src_port, dst_port, payload)
 
             self.streams[flow_key] = StreamInfo(
                 stream_id=stream_id,
                 protocol=proto,
-                app_protocol=app_proto,
+                app_protocol=candidate,
+                app_detection=evidence,
                 src_ip=src_ip,
                 src_port=src_port,
                 dst_ip=dst_ip,
@@ -95,11 +71,12 @@ class StreamReassembler:
         stream.total_bytes += len(payload)
         stream.end_time = max(stream.end_time, timestamp)
 
-        # Refine app protocol if initial was generic
-        if stream.app_protocol in ("TCP", "UDP") and payload:
-            refined = self.detect_app_protocol(proto, src_port, dst_port, payload)
-            if refined != proto:
-                stream.app_protocol = refined
+        rank = {"transport": 0, "port": 1, "signature": 2, "dissector": 3}
+        if rank[evidence] > rank[stream.app_detection] or (
+            rank[evidence] == rank[stream.app_detection] and candidate not in ("TCP", "UDP", "TLS", "HTTPS / TLS")
+        ):
+            stream.app_protocol = candidate
+            stream.app_detection = evidence
 
         # Append directional payload
         if payload:
@@ -118,4 +95,3 @@ class StreamReassembler:
         self.streams.clear()
         self.flow_initiators.clear()
         self.next_stream_id = 1
-
