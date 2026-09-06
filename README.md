@@ -1,4 +1,4 @@
-# PCAP Forensics & Flag Extraction Suite
+# PCAP Forensics & Flag Extraction
 
 <p align="center">
   <a href="https://github.com/Gabzkk/PCAP-ANALYZER/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License: MIT"></a>
