@@ -136,6 +136,15 @@ class TestForensicEngine(unittest.TestCase):
         stego_files = [f for f in extracted_files if f.has_stego_warning]
         self.assertGreaterEqual(len(stego_files), 1)
 
+    def test_h4g_pattern(self):
+        patterns_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "default_patterns.json")
+        scanner = FlagScanner(patterns_path)
+        sample = b"DATA: h4g{lowercase_flag_example_12345} END"
+        matches = scanner.scan_bytes(sample, source="test")
+        matched_patterns = {m.pattern_name for m in matches}
+        self.assertIn("h4g", matched_patterns)
+        self.assertTrue(any(m.flag == "h4g{lowercase_flag_example_12345}" for m in matches))
+
 
 if __name__ == "__main__":
     unittest.main()

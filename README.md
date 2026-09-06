@@ -52,7 +52,7 @@
   - Decodes **Base64** (standard & URL-safe), **Hex** (plain, escaped, spaced), **URL-encoding**, **Gzip/Zlib/Deflate**, **ROT13**, and **Reversed strings**.
   - Recurses up to 3 layers deep (e.g., URL-encoded parameter -> Base64 string -> Gzip compressed buffer -> Flag).
 - **Comprehensive Flag Scanner:**
-  - Pre-loaded with patterns for **Hack The Box** (`HTB{}`), **TryHackMe** (`THM{}`), **picoCTF** (`picoCTF{}`), **H4G** (`H4G{}`), **standard/generic flags** (`flag{}`, `CTF{}`), and customizable generic formats.
+  - Pre-loaded with patterns for **Hack The Box** (`HTB{}`), **TryHackMe** (`THM{}`), **picoCTF** (`picoCTF{}`), **H4G / h4g** (`H4G{}`, `h4g{}`), **standard/generic flags** (`flag{}`, `CTF{}`), and customizable generic formats.
   - Interactive live regex tester and JSON import/export in the GUI.
 - **Tri-Format Reporting:** Generates structured **JSON**, styled responsive **HTML5** dashboards, and vector **PDF** reports (via native Qt print engine).
 

@@ -28,6 +28,7 @@ class FlagScanner:
             {"name": "Hack The Box", "pattern": r"HTB\{[^}\r\n]+\}", "enabled": True},
             {"name": "TryHackMe", "pattern": r"THM\{[^}\r\n]+\}", "enabled": True},
             {"name": "H4G", "pattern": r"H4G\{[^}\r\n]+\}", "enabled": True},
+            {"name": "h4g", "pattern": r"h4g\{[^}\r\n]+\}", "enabled": True},
             {"name": "picoCTF", "pattern": r"[Pp]ico[Cc][Tt][Ff]\{[^}\r\n]+\}", "enabled": True},
             {"name": "Standard Flag", "pattern": r"(?:flag|FLAG)\{[^}\r\n]+\}", "enabled": True},
             {"name": "CTF generic", "pattern": r"CTF\{[^}\r\n]+\}", "enabled": True},

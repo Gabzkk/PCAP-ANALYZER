@@ -18,6 +18,12 @@
     "description": "H4G{...} flag format"
   },
   {
+    "name": "h4g",
+    "pattern": "h4g\\{[^\\}\\r\\n]+\\}",
+    "enabled": true,
+    "description": "h4g{...} flag format"
+  },
+  {
     "name": "picoCTF",
     "pattern": "[Pp]ico[Cc][Tt][Ff]\\{[^\\}\\r\\n]+\\}",
     "enabled": true,
